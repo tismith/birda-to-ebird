@@ -632,6 +632,7 @@ fn location_label(base: &str, latitude: f64, longitude: f64) -> String {
 fn ebird_common_name(name: &str) -> String {
     match name {
         "Australian White Ibis" => "Australian Ibis".to_string(),
+        "Willie Wagtail" => "Willie-wagtail".to_string(),
         _ => clean(name),
     }
 }
@@ -698,6 +699,7 @@ mod tests {
             ebird_common_name("Australian White Ibis"),
             "Australian Ibis"
         );
+        assert_eq!(ebird_common_name("Willie Wagtail"), "Willie-wagtail");
         assert_eq!(ebird_common_name("Rainbow Lorikeet"), "Rainbow Lorikeet");
     }
 
