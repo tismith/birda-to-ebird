@@ -11,7 +11,19 @@ cargo run --release -- convert toby_smith_birda_sightings_25-08-2026.zip \
   --location-name "Birda import"
 ```
 
-The generated file uses the same 19-column eBird Record Format as the old `ausbird` converter: Common Name, Genus, Species, Species Count, Species Comments, Location Name, coordinates, date/time, region, protocol, effort, and checklist fields. Country and state are inferred automatically from the first GPS point in each Birda session using OpenStreetMap Nominatim, with results cached in `.birda-to-ebird-region-cache.json`. Pass `--country` and/or `--state` to override inference. The source export still has no checklist duration or completeness flag, so those remain for review during eBird cleanup. A Birda session is represented by one eBird checklist location: the first GPS point in that session. This avoids turning a moving session into one checklist per GPS coordinate, but should be reviewed before import.
+The generated file uses the same 19-column eBird Record Format as the old `ausbird` converter: Common Name, Genus, Species, Species Count, Species Comments, Location Name, coordinates, date/time, region, protocol, effort, and checklist fields. Country and state are inferred automatically from the first GPS point in each Birda session using OpenStreetMap Nominatim, with results cached in the XDG cache directory. Pass `--country` and/or `--state` to override inference. The source export still has no checklist duration or completeness flag, so those remain for review during eBird cleanup. A Birda session is represented by one eBird checklist location: the first GPS point in that session. This avoids turning a moving session into one checklist per GPS coordinate, but should be reviewed before import.
+
+The local timezone is inferred independently for each session from its coordinates using bundled timezone-boundary data. This converts Birda's UTC timestamps to the correct local eBird date and time, including daylight-saving changes. Use `--timezone` only when deliberately overriding that inference.
+
+Persistent paths follow XDG conventions: configuration is read from `~/.config/birda-to-ebird/config.toml`, the import manifest is stored in `~/.local/state/birda-to-ebird/imports.json`, and the geocoding cache is stored in `~/.cache/birda-to-ebird/regions.json`. `--config`, `--manifest`, and `--region-cache` can override these paths.
+
+For example:
+
+```toml
+timezone = "Australia/Brisbane" # optional override for all sessions
+location_name = "Birda import"
+protocol = "Incidental"
+```
 
 Use `--with-header` to produce a human-inspectable CSV; omit it for the eBird import file.
 

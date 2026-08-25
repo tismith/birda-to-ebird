@@ -16,7 +16,7 @@
 - Keep the exact eBird column order, comma delimiter, MM/DD/YYYY dates, and 1 MB maximum output size.
 - A Birda session must become one eBird checklist: use its representative location and earliest local start time for every row in that session.
 - Reject sessions that span local calendar dates; eBird checklists cannot span dates.
-- Country and state/province come from reverse geocoding the representative coordinate, with explicit CLI values taking precedence. Cache lookups locally, use a clear User-Agent, respect service rate limits, and tolerate lookup failure with a review warning.
+- Timezone comes from the representative coordinate using bundled timezone-boundary data; an explicit CLI/config timezone is an intentional override. Country and state/province come from reverse geocoding the representative coordinate, with explicit CLI values taking precedence. Cache lookups locally, use a clear User-Agent, respect service rate limits, and tolerate lookup failure with a review warning.
 - Do not invent duration, completeness, observer count, or exact eBird hotspot identity when Birda does not provide it. Document assumptions and leave fields for eBird cleanup where appropriate.
 - Preserve source `sightingId` and `sessionId` for validation and deduplication, but never add them to the eBird CSV.
 

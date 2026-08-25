@@ -12,11 +12,15 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use tzf_rs::DefaultFinder;
 use zip::ZipArchive;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct Cli {
+    /// Configuration file; defaults to ~/.config/birda-to-ebird/config.toml.
+    #[arg(long, global = true)]
+    config: Option<PathBuf>,
     #[command(subcommand)]
     command: Command,
 }
@@ -29,8 +33,8 @@ enum Command {
         #[arg(short, long)]
         output: PathBuf,
         /// IANA timezone used to turn Birda's UTC timestamps into eBird dates/times.
-        #[arg(long, default_value = "UTC")]
-        timezone: String,
+        #[arg(long)]
+        timezone: Option<String>,
         /// eBird country code, for example AU or US.
         #[arg(long)]
         country: Option<String>,
@@ -38,19 +42,19 @@ enum Command {
         #[arg(long)]
         state: Option<String>,
         /// Name to use for the imported eBird location.
-        #[arg(long, default_value = "Birda import")]
-        location_name: String,
+        #[arg(long)]
+        location_name: Option<String>,
         /// Cache file for reverse-geocoded country/state results.
-        #[arg(long, default_value = ".birda-to-ebird-region-cache.json")]
-        region_cache: PathBuf,
+        #[arg(long)]
+        region_cache: Option<PathBuf>,
         /// Local ledger of Birda sightings confirmed as imported into eBird.
-        #[arg(long, default_value = ".birda-to-ebird-imports.json")]
-        manifest: PathBuf,
+        #[arg(long)]
+        manifest: Option<PathBuf>,
         /// Permit converting sightings already marked as imported.
         #[arg(long)]
         allow_reimport: bool,
-        #[arg(long, value_enum, default_value_t = Protocol::Incidental)]
-        protocol: Protocol,
+        #[arg(long, value_enum)]
+        protocol: Option<Protocol>,
         /// Preserve the source header for inspection. Omit it for direct eBird import.
         #[arg(long)]
         with_header: bool,
@@ -58,20 +62,83 @@ enum Command {
     /// Mark a Birda export as imported after eBird accepts it.
     MarkImported {
         input: PathBuf,
-        #[arg(long, default_value = ".birda-to-ebird-imports.json")]
-        manifest: PathBuf,
+        #[arg(long)]
+        manifest: Option<PathBuf>,
         /// Optional import identifier copied from eBird.
         #[arg(long)]
         ebird_import_id: Option<String>,
     },
 }
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, Deserialize, ValueEnum)]
 enum Protocol {
     Stationary,
     Traveling,
     Incidental,
     Historical,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FileConfig {
+    timezone: Option<String>,
+    country: Option<String>,
+    state: Option<String>,
+    location_name: Option<String>,
+    region_cache: Option<PathBuf>,
+    manifest: Option<PathBuf>,
+    protocol: Option<Protocol>,
+}
+
+#[derive(Debug)]
+struct AppConfig {
+    timezone: Option<String>,
+    country: Option<String>,
+    state: Option<String>,
+    location_name: String,
+    region_cache: PathBuf,
+    manifest: PathBuf,
+    protocol: Protocol,
+}
+
+fn default_app_paths() -> Result<(PathBuf, PathBuf, PathBuf)> {
+    let home = dirs::home_dir().context("cannot determine home directory")?;
+    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".config"));
+    let state_home = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".local/state"));
+    let cache_home = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".cache"));
+    Ok((
+        config_home.join("birda-to-ebird/config.toml"),
+        state_home.join("birda-to-ebird/imports.json"),
+        cache_home.join("birda-to-ebird/regions.json"),
+    ))
+}
+
+fn load_config(path: Option<&Path>) -> Result<AppConfig> {
+    let (default_config, default_manifest, default_cache) = default_app_paths()?;
+    let config_path = path.map(PathBuf::from).unwrap_or(default_config);
+    let file_config: FileConfig = if config_path.exists() {
+        let text = std::fs::read_to_string(&config_path)
+            .with_context(|| format!("read config {}", config_path.display()))?;
+        toml::from_str(&text).with_context(|| format!("parse config {}", config_path.display()))?
+    } else {
+        FileConfig::default()
+    };
+    Ok(AppConfig {
+        timezone: file_config.timezone,
+        country: file_config.country,
+        state: file_config.state,
+        location_name: file_config
+            .location_name
+            .unwrap_or_else(|| "Birda import".to_string()),
+        region_cache: file_config.region_cache.unwrap_or(default_cache),
+        manifest: file_config.manifest.unwrap_or(default_manifest),
+        protocol: file_config.protocol.unwrap_or(Protocol::Incidental),
+    })
 }
 
 impl Protocol {
@@ -130,6 +197,7 @@ const HEADER: [&str; 19] = [
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let config = load_config(cli.config.as_deref())?;
     match cli.command {
         Command::Convert {
             input,
@@ -146,28 +214,33 @@ fn main() -> Result<()> {
         } => convert(
             &input,
             &output,
-            &timezone,
-            country,
-            state,
-            location_name,
-            &region_cache,
-            &manifest,
+            timezone.as_deref().or(config.timezone.as_deref()),
+            country.or(config.country),
+            state.or(config.state),
+            location_name.unwrap_or(config.location_name),
+            region_cache.as_deref().unwrap_or(&config.region_cache),
+            manifest.as_deref().unwrap_or(&config.manifest),
             allow_reimport,
-            protocol,
+            protocol.unwrap_or(config.protocol),
             with_header,
         ),
         Command::MarkImported {
             input,
             manifest,
             ebird_import_id,
-        } => mark_imported(&input, &manifest, ebird_import_id),
+        } => mark_imported(
+            &input,
+            manifest.as_deref().unwrap_or(&config.manifest),
+            ebird_import_id,
+        ),
     }
 }
 
+#[allow(clippy::too_many_arguments)] // CLI options are kept explicit for readable call-site mapping.
 fn convert(
     input: &Path,
     output: &Path,
-    timezone: &str,
+    timezone_override: Option<&str>,
     country: Option<String>,
     state: Option<String>,
     location_name: String,
@@ -177,9 +250,7 @@ fn convert(
     protocol: Protocol,
     with_header: bool,
 ) -> Result<()> {
-    let tz: Tz = timezone
-        .parse()
-        .with_context(|| format!("invalid IANA timezone: {timezone}"))?;
+    let finder = DefaultFinder::new();
     let bytes = read_input(input)?;
     let mut reader = ReaderBuilder::new()
         .flexible(true)
@@ -249,10 +320,22 @@ fn convert(
             .entry(row.session_id.clone())
             .or_insert((*lat, *lon));
     }
+    let mut session_timezones: BTreeMap<String, Tz> = BTreeMap::new();
+    for (session_id, (latitude, longitude)) in &session_locations {
+        let timezone_name = timezone_override
+            .map(str::to_owned)
+            .unwrap_or_else(|| finder.get_tz_name(*longitude, *latitude).to_owned());
+        let tz: Tz = timezone_name.parse().with_context(|| {
+            format!("invalid or unknown timezone {timezone_name:?} for session {session_id}")
+        })?;
+        session_timezones.insert(session_id.clone(), tz);
+    }
     let mut session_starts: BTreeMap<String, DateTime<Utc>> = BTreeMap::new();
     let mut session_dates: BTreeMap<String, chrono::NaiveDate> = BTreeMap::new();
     for (row, instant, _, _) in &rows {
-        let local_date = instant.with_timezone(&tz).date_naive();
+        let local_date = instant
+            .with_timezone(&session_timezones[&row.session_id])
+            .date_naive();
         if let Some(previous_date) = session_dates.insert(row.session_id.clone(), local_date) {
             if previous_date != local_date {
                 bail!("Birda session {} spans multiple local calendar dates; split it before eBird import", row.session_id);
@@ -273,7 +356,8 @@ fn convert(
         writer.write_record(HEADER)?;
     }
     for (row, _, _, _) in rows {
-        let local = session_starts[&row.session_id].with_timezone(&tz);
+        let local =
+            session_starts[&row.session_id].with_timezone(&session_timezones[&row.session_id]);
         let (lat, lon) = session_locations[&row.session_id];
         let number = if row.count_type.eq_ignore_ascii_case("EXACT") {
             clean(&row.count)
@@ -356,6 +440,14 @@ fn read_manifest(path: &Path) -> Result<ImportManifest> {
         .with_context(|| format!("read import manifest {}", path.display()))
 }
 
+fn ensure_parent(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create directory {}", parent.display()))?;
+    }
+    Ok(())
+}
+
 fn mark_imported(
     input: &Path,
     manifest_path: &Path,
@@ -382,6 +474,7 @@ fn mark_imported(
         );
         count += 1;
     }
+    ensure_parent(manifest_path)?;
     let mut file = File::create(manifest_path)
         .with_context(|| format!("write import manifest {}", manifest_path.display()))?;
     serde_json::to_writer_pretty(&mut file, &manifest).context("serialize import manifest")?;
@@ -469,6 +562,7 @@ fn infer_regions(
         result.insert(session_id.clone(), region);
     }
     if !cache.is_empty() {
+        ensure_parent(cache_path)?;
         let mut file = File::create(cache_path)
             .with_context(|| format!("write region cache {}", cache_path.display()))?;
         serde_json::to_writer_pretty(&mut file, &cache).context("serialize region cache")?;
@@ -557,5 +651,42 @@ fn read_input(path: &Path) -> Result<Vec<u8>> {
             .read_to_end(&mut bytes)
             .context("read CSV")?;
         Ok(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_binomial_scientific_name() {
+        assert_eq!(
+            split_scientific_name("Trichoglossus moluccanus"),
+            ("Trichoglossus".into(), "moluccanus".into())
+        );
+        assert_eq!(split_scientific_name("Genus"), ("Genus".into(), "".into()));
+    }
+
+    #[test]
+    fn cleans_quotes_and_line_breaks() {
+        assert_eq!(clean("a \"quoted\"\ncomment"), "a 'quoted' comment");
+    }
+
+    #[test]
+    fn protocol_names_match_ebird_values() {
+        assert_eq!(Protocol::Incidental.as_str(), "Incidental");
+        assert_eq!(Protocol::Historical.as_str(), "Historical");
+    }
+
+    #[test]
+    fn config_file_overrides_defaults() {
+        let path =
+            std::env::temp_dir().join(format!("birda-to-ebird-test-{}.toml", std::process::id()));
+        std::fs::write(&path, "timezone = \"Australia/Brisbane\"\nlocation_name = \"Test location\"\nprotocol = \"Historical\"\n").unwrap();
+        let config = load_config(Some(&path)).unwrap();
+        assert_eq!(config.timezone.as_deref(), Some("Australia/Brisbane"));
+        assert_eq!(config.location_name, "Test location");
+        assert_eq!(config.protocol.as_str(), "Historical");
+        let _ = std::fs::remove_file(path);
     }
 }
