@@ -1,46 +1,89 @@
 # birda-to-ebird
 
-Convert a Birda CSV export (or the ZIP containing it) into eBird's headerless Record Format CSV.
+Convert a [Birda](https://birda.org/) CSV export into a CSV that can be imported into eBird.
 
-## Usage
+The program accepts either Birda’s CSV export or the ZIP file containing it. It groups sightings by Birda session, converts UTC timestamps to the local timezone for each session, infers regions from coordinates, and writes eBird’s headerless Record Format.
+
+## Quick start
 
 ```sh
-cargo run --release -- convert toby_smith_birda_sightings_25-08-2026.zip \
-  --output ebird-import.csv \
-  --timezone Australia/Melbourne \
-  --location-name "Birda import"
+cargo run --release -- convert birda-export.zip --output ebird-import.csv
 ```
 
-The generated file uses the same 19-column eBird Record Format as the old `ausbird` converter: Common Name, Genus, Species, Species Count, Species Comments, Location Name, coordinates, date/time, region, protocol, effort, and checklist fields. Country and state are inferred automatically from the first GPS point in each Birda session using OpenStreetMap Nominatim, with results cached in the XDG cache directory. Pass `--country` and/or `--state` to override inference. The source export still has no checklist duration or completeness flag, so those remain for review during eBird cleanup. A Birda session is represented by one eBird checklist location: the first GPS point in that session. This avoids turning a moving session into one checklist per GPS coordinate, but should be reviewed before import.
+Then upload `ebird-import.csv` through eBird’s `Submit` → `Import Data` → `Record Format` workflow:
 
-The local timezone is inferred independently for each session from its coordinates using bundled timezone-boundary data. This converts Birda's UTC timestamps to the correct local eBird date and time, including daylight-saving changes. Use `--timezone` only when deliberately overriding that inference.
+<https://ebird.org/import>
 
-Persistent paths follow XDG conventions: configuration is read from `~/.config/birda-to-ebird/config.toml`, the import manifest is stored in `~/.local/state/birda-to-ebird/imports.json`, and the geocoding cache is stored in `~/.cache/birda-to-ebird/regions.json`. `--config`, `--manifest`, and `--region-cache` can override these paths.
+For a human-readable version with column headings, add `--with-header`. Do not use that version for the eBird upload.
 
-For example:
+## Import workflow
+
+1. Export your sightings from Birda.
+2. Convert the CSV or ZIP export.
+3. Review the generated CSV.
+4. Upload it to eBird and complete any taxonomy or location cleanup eBird requests.
+5. After eBird accepts the import, record it locally:
+
+   ```sh
+   cargo run --release -- mark-imported birda-export.zip \
+     --ebird-import-id "optional-ebird-import-id"
+   ```
+
+The import ledger uses Birda’s stable `sightingId` values. Future conversions refuse sightings already recorded in the ledger. Use `--allow-reimport` only when deliberately retrying or correcting an import.
+
+## What the converter does
+
+- Produces eBird’s 19-column, headerless Record Format CSV.
+- Uses one representative coordinate per Birda session.
+- Uses the earliest sighting time in a session as that checklist’s start time.
+- Rejects sessions that span multiple local calendar dates.
+- Infers each session’s timezone from its coordinates using bundled timezone-boundary data.
+- Infers country and state/province using OpenStreetMap Nominatim.
+- Converts non-exact Birda counts to eBird’s `X` value.
+- Preserves Birda notes as species comments.
+- Refuses output larger than eBird’s 1 MB import limit.
+
+Birda does not provide all eBird effort fields. Duration, completeness, and exact eBird location/hotspot matching may therefore require review during eBird’s cleanup process.
+
+The eBird import specification is documented here:
+
+<https://support.ebird.org/en/support/solutions/articles/48000907878-upload-spreadsheet-data-to-ebird>
+
+## Configuration
+
+Persistent files use standard XDG locations:
+
+- Configuration: `~/.config/birda-to-ebird/config.toml`
+- Import ledger: `~/.local/state/birda-to-ebird/imports.json`
+- Geocoding cache: `~/.cache/birda-to-ebird/regions.json`
+
+Example configuration:
 
 ```toml
-timezone = "Australia/Brisbane" # optional override for all sessions
+# Optional: override coordinate-based timezone inference for every session.
+timezone = "Australia/Brisbane"
 location_name = "Birda import"
 protocol = "Incidental"
 ```
 
-Use `--with-header` to produce a human-inspectable CSV; omit it for the eBird import file.
+Command-line options override configuration-file values. Use `--config`, `--manifest`, or `--region-cache` to select alternate paths.
 
-To prevent accidental re-imports, keep the default local manifest and mark an export only after eBird accepts it:
+Country and state can also be supplied explicitly when required:
 
 ```sh
-cargo run --release -- mark-imported toby_smith_birda_sightings_25-08-2026.zip \
-  --ebird-import-id "optional-ebird-id"
+cargo run --release -- convert birda-export.zip \
+  --output ebird-import.csv \
+  --country AU \
+  --state QLD
 ```
-
-Future conversions will refuse sightings recorded in that manifest. Use `--allow-reimport` deliberately when testing or correcting an import. The manifest uses Birda's stable `sightingId`; eBird's read API cannot reliably expose that source ID, so it is the authoritative duplicate check.
-
-eBird's import tool is a browser-based authenticated workflow. The public eBird API is for reading/product data, not submitting checklists, so this program deliberately does not store or automate eBird credentials. After conversion, upload the CSV at https://ebird.org/import.
 
 ## Development
 
 ```sh
-cargo test
-cargo fmt --check
+cargo fmt --all --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --all-features --locked
+cargo build --release --all-features --locked
 ```
+
+CI runs these checks on pushes and pull requests. Dependabot monitors Cargo and GitHub Actions dependencies.
