@@ -633,6 +633,17 @@ fn ebird_common_name(name: &str) -> String {
     match name {
         "Australian White Ibis" => "Australian Ibis".to_string(),
         "Willie Wagtail" => "Willie-wagtail".to_string(),
+        "Bush Stone-curlew" => "Bush Thick-knee".to_string(),
+        "Australian Pied Cormorant" => "Pied Cormorant".to_string(),
+        "Common Starling" => "European Starling".to_string(),
+        "Eastern Cattle Egret" => "Eastern Cattle-Egret".to_string(),
+        "Greater Crested Tern" => "Great Crested Tern".to_string(),
+        "Grey Butcherbird" => "Gray Butcherbird".to_string(),
+        "Orange-footed Scrubfowl" => "Orange-footed Megapode".to_string(),
+        "Pacific Reef Heron" => "Pacific Reef-Heron".to_string(),
+        "Rock Dove" => "Rock Pigeon".to_string(),
+        "Australian King Parrot" => "Australian King-Parrot".to_string(),
+        "Yellow-tailed Black Cockatoo" => "Yellow-tailed Black-Cockatoo".to_string(),
         _ => clean(name),
     }
 }
@@ -700,6 +711,38 @@ mod tests {
             "Australian Ibis"
         );
         assert_eq!(ebird_common_name("Willie Wagtail"), "Willie-wagtail");
+        assert_eq!(ebird_common_name("Bush Stone-curlew"), "Bush Thick-knee");
+        assert_eq!(
+            ebird_common_name("Australian Pied Cormorant"),
+            "Pied Cormorant"
+        );
+        assert_eq!(ebird_common_name("Common Starling"), "European Starling");
+        assert_eq!(
+            ebird_common_name("Eastern Cattle Egret"),
+            "Eastern Cattle-Egret"
+        );
+        assert_eq!(
+            ebird_common_name("Greater Crested Tern"),
+            "Great Crested Tern"
+        );
+        assert_eq!(ebird_common_name("Grey Butcherbird"), "Gray Butcherbird");
+        assert_eq!(
+            ebird_common_name("Orange-footed Scrubfowl"),
+            "Orange-footed Megapode"
+        );
+        assert_eq!(
+            ebird_common_name("Pacific Reef Heron"),
+            "Pacific Reef-Heron"
+        );
+        assert_eq!(ebird_common_name("Rock Dove"), "Rock Pigeon");
+        assert_eq!(
+            ebird_common_name("Australian King Parrot"),
+            "Australian King-Parrot"
+        );
+        assert_eq!(
+            ebird_common_name("Yellow-tailed Black Cockatoo"),
+            "Yellow-tailed Black-Cockatoo"
+        );
         assert_eq!(ebird_common_name("Rainbow Lorikeet"), "Rainbow Lorikeet");
     }
 
