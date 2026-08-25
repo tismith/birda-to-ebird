@@ -39,11 +39,12 @@ The import ledger uses Birda’s stable `sightingId` values. Future conversions 
 - Rejects sessions that span multiple local calendar dates.
 - Infers each session’s timezone from its coordinates using bundled timezone-boundary data.
 - Infers country and state/province using OpenStreetMap Nominatim.
+- Gives each session coordinate a stable location label, preventing unrelated sessions from being merged into one eBird location.
 - Converts non-exact Birda counts to eBird’s `X` value.
 - Preserves Birda notes as species comments.
 - Refuses output larger than eBird’s 1 MB import limit.
 
-Birda does not provide all eBird effort fields. Duration, completeness, and exact eBird location/hotspot matching may therefore require review during eBird’s cleanup process.
+Birda does not provide all eBird effort fields. Duration, completeness, and exact eBird location/hotspot matching may therefore require review during eBird’s cleanup process. The generated location labels include coordinates because Birda does not provide eBird location IDs.
 
 The eBird import specification is documented here:
 

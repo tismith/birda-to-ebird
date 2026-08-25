@@ -347,6 +347,15 @@ fn convert(
             .or_insert(*instant);
     }
     let regions = infer_regions(&session_locations, country, state, region_cache_path)?;
+    let session_location_names: BTreeMap<_, _> = session_locations
+        .iter()
+        .map(|(session_id, (latitude, longitude))| {
+            (
+                session_id.clone(),
+                location_label(&location_name, *latitude, *longitude),
+            )
+        })
+        .collect();
 
     let mut writer = WriterBuilder::new()
         .has_headers(false)
@@ -372,7 +381,7 @@ fn convert(
             species,
             number,
             species_comment,
-            clean(&location_name),
+            session_location_names[&row.session_id].clone(),
             lat.to_string(),
             lon.to_string(),
             format!(
@@ -616,6 +625,10 @@ fn clean(value: &str) -> String {
     value.replace('"', "'").replace(['\r', '\n'], " ")
 }
 
+fn location_label(base: &str, latitude: f64, longitude: f64) -> String {
+    format!("{} ({latitude:.5}, {longitude:.5})", clean(base))
+}
+
 fn ebird_common_name(name: &str) -> String {
     match name {
         "Australian White Ibis" => "Australian Ibis".to_string(),
@@ -686,6 +699,18 @@ mod tests {
             "Australian Ibis"
         );
         assert_eq!(ebird_common_name("Rainbow Lorikeet"), "Rainbow Lorikeet");
+    }
+
+    #[test]
+    fn location_labels_keep_coordinates_distinct() {
+        assert_eq!(
+            location_label("Birda import", -27.4698, 153.0251),
+            "Birda import (-27.46980, 153.02510)"
+        );
+        assert_ne!(
+            location_label("Birda import", -27.4698, 153.0251),
+            location_label("Birda import", -33.8688, 151.2093)
+        );
     }
 
     #[test]
