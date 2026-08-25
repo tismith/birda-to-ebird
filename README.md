@@ -7,10 +7,10 @@ The program accepts either Birda’s CSV export or the ZIP file containing it. I
 ## Quick start
 
 ```sh
-cargo run --release -- convert birda-export.zip --output ebird-import.csv
+cargo run --release -- convert birda-export.zip
 ```
 
-Then upload `ebird-import.csv` through eBird’s `Submit` → `Import Data` workflow. When eBird asks for the format, choose **eBird Record Format (Extended)**. Do not choose **eBird Checklist Format (Grid)**; the converter writes one observation per row.
+This writes `eBird.csv` by default. Use `--output` to choose a different filename. Then upload the CSV through eBird’s `Submit` → `Import Data` workflow. When eBird asks for the format, choose **eBird Record Format (Extended)**. Do not choose **eBird Checklist Format (Grid)**; the converter writes one observation per row.
 
 <https://ebird.org/import>
 

@@ -31,7 +31,7 @@ enum Command {
     Convert {
         input: PathBuf,
         #[arg(short, long)]
-        output: PathBuf,
+        output: Option<PathBuf>,
         /// IANA timezone used to turn Birda's UTC timestamps into eBird dates/times.
         #[arg(long)]
         timezone: Option<String>,
@@ -213,7 +213,7 @@ fn main() -> Result<()> {
             with_header,
         } => convert(
             &input,
-            &output,
+            &output.unwrap_or_else(default_output_path),
             timezone.as_deref().or(config.timezone.as_deref()),
             country.or(config.country),
             state.or(config.state),
@@ -625,6 +625,10 @@ fn clean(value: &str) -> String {
     value.replace('"', "'").replace(['\r', '\n'], " ")
 }
 
+fn default_output_path() -> PathBuf {
+    PathBuf::from("eBird.csv")
+}
+
 fn location_label(base: &str, latitude: f64, longitude: f64) -> String {
     format!("{} ({latitude:.5}, {longitude:.5})", clean(base))
 }
@@ -756,6 +760,11 @@ mod tests {
             location_label("Birda import", -27.4698, 153.0251),
             location_label("Birda import", -33.8688, 151.2093)
         );
+    }
+
+    #[test]
+    fn default_output_is_ebird_csv() {
+        assert_eq!(default_output_path(), PathBuf::from("eBird.csv"));
     }
 
     #[test]
