@@ -1,0 +1,17 @@
+[package]
+name = "birda-to-ebird"
+version = "0.1.0"
+edition = "2021"
+description = "Convert Birda CSV exports into eBird Record Format CSV files"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4"
+chrono-tz = "0.10"
+clap = { version = "4", features = ["derive"] }
+csv = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = "4"

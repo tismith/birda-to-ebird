@@ -1,0 +1,5 @@
+/target/
+*.zip
+.birda-to-ebird-region-cache.json
+.birda-to-ebird-imports.json
+ebird-import*.csv
