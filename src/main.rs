@@ -367,7 +367,7 @@ fn convert(
         let species_comment = clean(&row.note);
         let (genus, species) = split_scientific_name(&row.scientific_name);
         writer.write_record([
-            clean(&row.common_name),
+            ebird_common_name(&row.common_name),
             genus,
             species,
             number,
@@ -616,6 +616,13 @@ fn clean(value: &str) -> String {
     value.replace('"', "'").replace(['\r', '\n'], " ")
 }
 
+fn ebird_common_name(name: &str) -> String {
+    match name {
+        "Australian White Ibis" => "Australian Ibis".to_string(),
+        _ => clean(name),
+    }
+}
+
 fn split_scientific_name(name: &str) -> (String, String) {
     let mut parts = name.splitn(2, char::is_whitespace);
     (
@@ -670,6 +677,15 @@ mod tests {
     #[test]
     fn cleans_quotes_and_line_breaks() {
         assert_eq!(clean("a \"quoted\"\ncomment"), "a 'quoted' comment");
+    }
+
+    #[test]
+    fn normalizes_ebird_common_name_aliases() {
+        assert_eq!(
+            ebird_common_name("Australian White Ibis"),
+            "Australian Ibis"
+        );
+        assert_eq!(ebird_common_name("Rainbow Lorikeet"), "Rainbow Lorikeet");
     }
 
     #[test]
