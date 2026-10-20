@@ -17,4 +17,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1.1"
 tzf-rs = "2.1.2"
-zip = "8"
+zip = "9"

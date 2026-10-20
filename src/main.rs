@@ -672,7 +672,10 @@ fn read_input(path: &Path) -> Result<Vec<u8>> {
             .find(|&i| {
                 archive
                     .by_index(i)
-                    .map(|f| f.name().to_ascii_lowercase().ends_with(".csv"))
+                    .and_then(|f| {
+                        f.name()
+                            .map(|name| name.to_ascii_lowercase().ends_with(".csv"))
+                    })
                     .unwrap_or(false)
             })
             .context("ZIP contains no CSV file")?;
@@ -693,6 +696,38 @@ fn read_input(path: &Path) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_first_csv_from_zip_and_rejects_archives_without_csv() {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+
+        for include_csv in [false, true] {
+            let path = std::env::temp_dir().join(format!(
+                "birda-to-ebird-zip-test-{}-{include_csv}.ZIP",
+                std::process::id()
+            ));
+            let mut archive = zip::ZipWriter::new(File::create(&path).unwrap());
+            let options = SimpleFileOptions::default();
+            archive.start_file("README.txt", options).unwrap();
+            archive.write_all(b"Not the export").unwrap();
+            if include_csv {
+                archive.start_file("export/Sightings.CsV", options).unwrap();
+                archive.write_all(b"species,count\nMagpie,2\n").unwrap();
+                archive.start_file("second.csv", options).unwrap();
+                archive.write_all(b"Not the first CSV").unwrap();
+            }
+            drop(archive.finish().unwrap());
+
+            let result = read_input(&path);
+            std::fs::remove_file(&path).unwrap();
+            if include_csv {
+                assert_eq!(result.unwrap(), b"species,count\nMagpie,2\n");
+            } else {
+                assert_eq!(result.unwrap_err().to_string(), "ZIP contains no CSV file");
+            }
+        }
+    }
 
     #[test]
     fn splits_binomial_scientific_name() {
