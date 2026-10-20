@@ -673,7 +673,8 @@ fn read_input(path: &Path) -> Result<Vec<u8>> {
                 archive
                     .by_index(i)
                     .and_then(|f| {
-                        f.name().map(|name| name.to_ascii_lowercase().ends_with(".csv"))
+                        f.name()
+                            .map(|name| name.to_ascii_lowercase().ends_with(".csv"))
                     })
                     .unwrap_or(false)
             })
